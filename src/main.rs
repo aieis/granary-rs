@@ -6,7 +6,6 @@ use crossterm::{
     terminal, cursor, style::{self, Stylize}, event::Event
 };
 
-
 struct Granary {
     cells : Vec<CellContainer>,
     shots : Vec<Point>,
@@ -31,6 +30,14 @@ struct Cell {
     nout: usize,
     nknots: usize,
     knots: Vec<i32>,
+}
+
+struct Canvas {
+    height : usize,
+    width : usize,
+    stride : usize,
+    data: Vec<char>,
+    stdout : Stdout,
 }
 
 fn make_cell(nin : usize, nout : usize) -> Cell
@@ -96,8 +103,8 @@ fn print_cell(cell : &Cell) {
 
 fn random_point(width : f64, height : f64) -> Point {
     return Point {
-        x : rand::thread_rng().gen_range(0..width as i64) as f64,
-        y : rand::thread_rng().gen_range(0..height as i64) as f64
+        x : rand::thread_rng().gen_range(0..width as i64 - 1) as f64,
+        y : rand::thread_rng().gen_range(0..height as i64 - 1) as f64
     }
 }
 
@@ -135,10 +142,13 @@ fn nourish() {
     };
 
 
-    let mut stdout = io::stdout();
-    execute!(stdout, terminal::Clear(terminal::ClearType::All)).unwrap();
-    
+    let cw = 120;
+    let ch = 60;
+
+    let mut canvas = make_canvas(cw, ch);
+
     loop {
+        
         if beat % shock_rate == 0 {
             for cellc in gran.cells.iter_mut() {
                 let p : &Point = &(gran.shots[random(gran.shots.len() as i32) as usize]);
@@ -154,46 +164,77 @@ fn nourish() {
 
         for cellc in gran.cells.iter_mut() {
             let res = query(&cellc.cell);
-            cellc.loc.x = clamp(cellc.loc.x + (res[0] - res[2]) as f64, 0.0, width);
-            cellc.loc.y = clamp(cellc.loc.y + (res[1] - res[3]) as f64, 0.0, height);            
+            cellc.loc.x = clamp(cellc.loc.x + (res[0] - res[2]) as f64, 0.0, width - 1.0);
+            cellc.loc.y = clamp(cellc.loc.y + (res[1] - res[3]) as f64, 0.0, height - 1.0);            
         }
         
-        if !draw(&gran, &mut stdout) {
+        if !draw(&mut canvas, &gran) {
             break;
         }
-    }
 
-    stdout.flush().unwrap();
+    }
+    
+    cleanup_canvas(&mut canvas);
 }
 
+fn make_canvas(width : usize, height : usize) -> Canvas {
+    let stride = width + 3;
+    let size = (width + 3) * (height + 2);
+    let mut data = Vec::with_capacity(size);
+    data.resize(size, ' ');
 
-fn draw(gran : &Granary, stdout : &mut Stdout) -> bool
-{
-    const CW : usize = 120;
-    const CH : usize = 120;
-
-    let mut board = [[' '; CW+1]; CH+1];
-
-    for cellc in gran.cells.iter() {
-        let posx = (cellc.loc.x / gran.width * CW as f64) as usize;
-        let posy = (cellc.loc.y / gran.height * CH as f64) as usize;
-        board[posy][posx] = 'O';
+    for i in 0..width+3 {
+        let idx_top = i;
+        let idx_bot = (height + 1) * stride + i;
+        data[idx_top] = '=';
+        data[idx_bot] = '=';
     }
+
+    for i in 0..height+2 {
+        let idx_left = i * stride;
+        let idx_right = (i + 1) * stride - 2;
+        data[idx_left] = '|';
+        data[idx_right] = '|';
+        data[idx_right + 1] = '\n';
+    }
+
+        
+    let mut stdout = io::stdout();
+    execute!(stdout, terminal::Clear(terminal::ClearType::All)).unwrap();
+    
+    return Canvas {width, height, stride, data, stdout};
+}
+
+fn cleanup_canvas(canvas : &mut Canvas) {
+    canvas.stdout.flush().unwrap();
+}
+
+fn draw(canvas : &mut Canvas, gran : &Granary) -> bool
+{
+    
+    let mut board = canvas.data.clone();
+
+    let cw = canvas.width;
+    let ch = canvas.height;
+    let stride = canvas.stride;
+    for cellc in gran.cells.iter() {
+        let posx = (cellc.loc.x / gran.width * cw as f64) as usize;
+        let posy = (cellc.loc.y / gran.height * ch as f64) as usize;
+        let idx = (posy + 1) * stride + (posx + 1);
+        board[idx] = 'O';
+    }
+
 
     for shot in gran.shots.iter() {
-        let posx = (shot.x / gran.width * CW as f64) as usize;
-        let posy = (shot.y / gran.height * CH as f64) as usize;
-        board[posy][posx] = '+';
+        let posx = (shot.x / gran.width * cw as f64) as usize;
+        let posy = (shot.y / gran.height * ch as f64) as usize;
+        let idx = (posy + 1) * stride + (posx + 1);
+        board[idx] = '+';
     }
 
-    let mut boardlist : Vec<String> = vec![String::from_iter(['='; CW+1])];
-    let mut board_s : Vec<String> = board.iter().map(|x| String::from_iter(x)).collect();
-    boardlist.append(&mut board_s);
-    boardlist.push(String::from_iter(['='; CW+1]));
-    
-    let boardstr = boardlist.join("\n");
+    let boardstr = String::from_iter(board);
 
-    queue!(stdout, cursor::MoveTo(0,0), style::Print(boardstr)).unwrap();
+    queue!(canvas.stdout, cursor::MoveTo(0,0), style::Print(boardstr)).unwrap();
     if crossterm::event::poll(std::time::Duration::from_millis(1)).unwrap() {
         return match crossterm::event::read().unwrap() {
             Event::Key(_) => false,
@@ -202,13 +243,6 @@ fn draw(gran : &Granary, stdout : &mut Stdout) -> bool
     }
 
     return true;
-    
-    // println!("{}", String::from_iter(['='; CW+1]));
-    // for row in board {
-    //     println!("{}", String::from_iter(row));
-    // }
-    // println!("{}", String::from_iter(['='; CW+1]));
-    
 }
 
 fn main() {
