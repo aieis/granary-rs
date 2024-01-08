@@ -1,3 +1,5 @@
+pub mod map;
+
 use num::clamp;
 use rand::{distributions::Bernoulli, Rng};
 use std::io::{self, Write, Stdout};
