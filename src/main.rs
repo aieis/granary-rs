@@ -1,16 +1,18 @@
-pub mod map;
+pub mod mat;
 
+use mat::mat::SparseMatrix;
 use num::clamp;
-use rand::{distributions::Bernoulli, Rng};
+use rand::{Rng, distributions::Bernoulli, seq::SliceRandom};
 use std::io::{self, Write, Stdout};
 use crossterm::{
     execute, queue,
-    terminal, cursor, style::{self, Stylize}, event::Event
+    terminal, cursor, style, event::Event
 };
 
 struct Granary {
     cells : Vec<CellContainer>,
     shots : Vec<Point>,
+    map : SparseMatrix<u32>,
     width: f64,
     height: f64,
 }
@@ -97,18 +99,18 @@ fn query(cell : &Cell) -> Vec<i32> {
     return output;
 }
 
-fn print_cell(cell : &Cell) {
-    for i in 0..cell.nknots {
-        println!("{:?}", &cell.knots[i*cell.nknots..(i+1)*cell.nknots]);
-    }
-}
+// fn print_cell(cell : &Cell) {
+//     for i in 0..cell.nknots {
+//         println!("{:?}", &cell.knots[i*cell.nknots..(i+1)*cell.nknots]);
+//     }
+// }
 
-fn random_point(width : f64, height : f64) -> Point {
-    return Point {
-        x : rand::thread_rng().gen_range(0..width as i64 - 1) as f64,
-        y : rand::thread_rng().gen_range(0..height as i64 - 1) as f64
-    }
-}
+// fn random_point(width : f64, height : f64) -> Point {
+//     return Point {
+//         x : rand::thread_rng().gen_range(0..width as i64 - 1) as f64,
+//         y : rand::thread_rng().gen_range(0..height as i64 - 1) as f64
+//     }
+// }
 
 fn random(mx : i32) -> f64 {
     return rand::thread_rng().gen_range(0..mx) as f64;
@@ -119,29 +121,51 @@ fn random(mx : i32) -> f64 {
 // }
 
 fn nourish() {
-    let width : f64 = 2000.0;
-    let height : f64 = 2000.0;
-    let cells : Vec<CellContainer> = (0..10)
+    let width : f64 = 4000.0;
+    let height : f64 = 4000.0;
+
+    let mut posx : Vec<u32> = (0..width as u32).collect();
+    let mut posy : Vec<u32> = (0..height as u32).collect();
+
+    posx.shuffle(&mut rand::thread_rng());
+    posy.shuffle(&mut rand::thread_rng());
+
+    let num_cells = 1000;
+    let cells : Vec<CellContainer> = (2..num_cells as usize + 2)
         .map(|id|
              CellContainer {
-                 id,
+                 id: id as u32,
                  cell : make_cell(4, 4),
-                 loc : random_point(width, height)})
+                 loc : Point {x: posx[id] as f64, y: posy[id] as f64}
+             })
         .collect();
 
-    let shots : Vec<Point> = (0..10)
-        .map(|_| {random_point(width, height)})
+    let shots : Vec<Point> = (0..1000 as usize)
+        .map(|ind| {Point {x: posx[ind + num_cells] as f64, y: posy[ind + num_cells] as f64}})
         .collect();
 
     let beat = 0;
     let shock_rate = 20;
 
     let mut gran = Granary {
-            cells,
-            shots,
-            width,
-            height
+        cells,
+        shots,
+        width,
+        height,
+        map : SparseMatrix::new(width as usize, height as usize, 0)
     };
+
+    for cellc in gran.cells.iter() {
+        let x = cellc.loc.x as usize;
+        let y = cellc.loc.y as usize;
+        gran.map.insert(x, y, cellc.id);
+    }
+
+    for loc in gran.shots.iter() {
+        let x = loc.x as usize;
+        let y = loc.y as usize;
+        gran.map.insert(x, y, 1);
+    }
 
 
     let cw = 120;
@@ -166,8 +190,19 @@ fn nourish() {
 
         for cellc in gran.cells.iter_mut() {
             let res = query(&cellc.cell);
-            cellc.loc.x = clamp(cellc.loc.x + (res[0] - res[2]) as f64, 0.0, width - 1.0);
-            cellc.loc.y = clamp(cellc.loc.y + (res[1] - res[3]) as f64, 0.0, height - 1.0);            
+
+            let tx = clamp(cellc.loc.x + (res[0] - res[2]) as f64, 0.0, width - 1.0);
+            let ty = clamp(cellc.loc.y + (res[1] - res[3]) as f64, 0.0, height - 1.0);
+
+            if gran.map[[tx as usize, ty as usize]] != 0 || (tx == cellc.loc.x && ty == cellc.loc.y) {
+                continue;
+            }
+
+            gran.map.insert(cellc.loc.x as usize, cellc.loc.y as usize, 0);
+            
+            cellc.loc.x = tx;
+            cellc.loc.y = ty;
+            gran.map.insert(tx as usize, ty as usize, cellc.id);
         }
         
         if !draw(&mut canvas, &gran) {
@@ -213,25 +248,24 @@ fn cleanup_canvas(canvas : &mut Canvas) {
 
 fn draw(canvas : &mut Canvas, gran : &Granary) -> bool
 {
-    
     let mut board = canvas.data.clone();
 
     let cw = canvas.width;
     let ch = canvas.height;
     let stride = canvas.stride;
-    for cellc in gran.cells.iter() {
-        let posx = (cellc.loc.x / gran.width * cw as f64) as usize;
-        let posy = (cellc.loc.y / gran.height * ch as f64) as usize;
-        let idx = (posy + 1) * stride + (posx + 1);
-        board[idx] = 'O';
-    }
-
-
+    
     for shot in gran.shots.iter() {
         let posx = (shot.x / gran.width * cw as f64) as usize;
         let posy = (shot.y / gran.height * ch as f64) as usize;
         let idx = (posy + 1) * stride + (posx + 1);
         board[idx] = '+';
+    }
+
+    for cellc in gran.cells.iter() {
+        let posx = (cellc.loc.x / gran.width * cw as f64) as usize;
+        let posy = (cellc.loc.y / gran.height * ch as f64) as usize;
+        let idx = (posy + 1) * stride + (posx + 1);
+        board[idx] = 'O';
     }
 
     let boardstr = String::from_iter(board);
