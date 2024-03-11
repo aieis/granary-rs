@@ -55,29 +55,10 @@ pub mod mat {
     
     fn svec_find_idx<T>(svec : &SparseVector<T>, cidx : usize) -> (bool, usize)
     {
-        let mut cb = 0;
-        let mut ce = svec.len();
-
-        if ce == 0 {
-            return (false, 0);
-        }
-        
-        loop {
-            let cm = (ce - cb) / 2;
-
-            if svec[cm].idx == cidx {
-                return (true, cm)
-            }
-            if cm <= cb {
-                return (false, cm);
-            }
-
-            if svec[cm].idx > cidx {
-                ce = cm;
-            } else {
-                cb = cm;
-            }
-        }
+        match svec.binary_search_by(|elem| { elem.idx.cmp(&cidx) }) {
+            Ok(pos) => { return (true, pos); }
+            Err(pos) => { return (false, pos); },
+        };        
     }
 
 

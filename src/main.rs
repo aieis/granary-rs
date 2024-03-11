@@ -3,7 +3,7 @@ pub mod mat;
 use mat::mat::SparseMatrix;
 use num::clamp;
 use rand::{Rng, distributions::Bernoulli, seq::SliceRandom};
-use std::io::{self, Write, Stdout};
+use std::{io::{self, Write, Stdout}, time::{Instant, Duration}};
 use crossterm::{
     execute, queue,
     terminal, cursor, style, event::Event
@@ -22,6 +22,7 @@ struct CellContainer
     id : u32,
     cell : Cell,
     loc : Point,
+    health: u32,
 }
 
 struct Point {
@@ -99,6 +100,10 @@ fn query(cell : &Cell) -> Vec<i32> {
     return output;
 }
 
+fn propagate(p1 : &Cell, p2 : &Cell) -> Cell {
+    panic!("not implemented");
+}
+
 // fn print_cell(cell : &Cell) {
 //     for i in 0..cell.nknots {
 //         println!("{:?}", &cell.knots[i*cell.nknots..(i+1)*cell.nknots]);
@@ -136,7 +141,8 @@ fn nourish() {
              CellContainer {
                  id: id as u32,
                  cell : make_cell(4, 4),
-                 loc : Point {x: posx[id] as f64, y: posy[id] as f64}
+                 loc : Point {x: posx[id] as f64, y: posy[id] as f64},
+                 health : 200
              })
         .collect();
 
@@ -144,7 +150,7 @@ fn nourish() {
         .map(|ind| {Point {x: posx[ind + num_cells] as f64, y: posy[ind + num_cells] as f64}})
         .collect();
 
-    let beat = 0;
+    let mut beat = 0;
     let shock_rate = 20;
 
     let mut gran = Granary {
@@ -167,12 +173,11 @@ fn nourish() {
         gran.map.insert(x, y, 1);
     }
 
-
     let cw = 120;
     let ch = 60;
 
     let mut canvas = make_canvas(cw, ch);
-
+    let mut start = Instant::now();
     loop {
         
         if beat % shock_rate == 0 {
@@ -188,27 +193,66 @@ fn nourish() {
             }
         }
 
-        for cellc in gran.cells.iter_mut() {
+        gran.cells.retain_mut(|cellc|{
             let res = query(&cellc.cell);
 
-            let tx = clamp(cellc.loc.x + (res[0] - res[2]) as f64, 0.0, width - 1.0);
-            let ty = clamp(cellc.loc.y + (res[1] - res[3]) as f64, 0.0, height - 1.0);
+            let mut tx = clamp(cellc.loc.x + (res[0] - res[2]) as f64, 0.0, width - 1.0);
+            let mut ty = clamp(cellc.loc.y + (res[1] - res[3]) as f64, 0.0, height - 1.0);
 
-            if gran.map[[tx as usize, ty as usize]] != 0 || (tx == cellc.loc.x && ty == cellc.loc.y) {
-                continue;
+            if gran.map[[tx as usize, ty as usize]] == 1 {
+                cellc.health += 3000;
+                gran.map.insert(tx as usize, ty as usize, 0);
             }
 
+            let still = gran.map[[tx as usize, ty as usize]] > 1 || tx == cellc.loc.x && ty == cellc.loc.y;
+            if gran.map[[tx as usize, ty as usize]] > 1 {
+                tx = cellc.loc.x;
+                ty = cellc.loc.y;
+            }
+
+            cellc.health -= 1;
+            
+            if cellc.health == 0 {
+                gran.map.insert(cellc.loc.x as usize, cellc.loc.y as usize, 0);
+                return false;
+            }
+
+            if still {
+                return true;
+            }
+            
             gran.map.insert(cellc.loc.x as usize, cellc.loc.y as usize, 0);
             
             cellc.loc.x = tx;
             cellc.loc.y = ty;
             gran.map.insert(tx as usize, ty as usize, cellc.id);
-        }
-        
-        if !draw(&mut canvas, &gran) {
-            break;
+
+            return true;
+        });
+
+        gran.shots.retain_mut(|shot| {
+            return gran.map[[shot.x as usize, shot.y as usize]] == 1;
+        });
+
+        if gran.shots.len() == 0 {
+            gran.shots.push(Point { x: 0.0, y:  0.0});
         }
 
+        if gran.cells.len() < 300 {
+            
+        }
+        
+        beat += 1;
+
+
+        let elapsed = start.elapsed();
+        start = Instant::now();
+        
+        if !draw(&mut canvas, &gran, elapsed) {
+            break;
+        };
+
+        
     }
     
     cleanup_canvas(&mut canvas);
@@ -246,7 +290,7 @@ fn cleanup_canvas(canvas : &mut Canvas) {
     canvas.stdout.flush().unwrap();
 }
 
-fn draw(canvas : &mut Canvas, gran : &Granary) -> bool
+fn draw(canvas : &mut Canvas, gran : &Granary, elapsed : Duration) -> bool
 {
     let mut board = canvas.data.clone();
 
@@ -268,9 +312,13 @@ fn draw(canvas : &mut Canvas, gran : &Granary) -> bool
         board[idx] = 'O';
     }
 
-    let boardstr = String::from_iter(board);
+    let mut boardstr = String::from_iter(board);
+    let dur = format!("\n{:.2?}", elapsed);
 
+    boardstr.push_str(&dur);
+    
     queue!(canvas.stdout, cursor::MoveTo(0,0), style::Print(boardstr)).unwrap();
+    //queue!(canvas.stdout, cursor::MoveTo(0, ch as u16 + 1), style::Print(dur)).unwrap();
     if crossterm::event::poll(std::time::Duration::from_millis(1)).unwrap() {
         return match crossterm::event::read().unwrap() {
             Event::Key(_) => false,
