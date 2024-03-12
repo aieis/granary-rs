@@ -30,6 +30,7 @@ struct Point {
     y: f64
 }
 
+#[derive(Clone)]
 struct Cell {
     nin: usize,
     nout: usize,
@@ -45,9 +46,9 @@ struct Canvas {
     stdout : Stdout,
 }
 
-fn make_cell(nin : usize, nout : usize) -> Cell
+fn make_cell(nin : usize, nout : usize, mnk : usize, mxk : usize) -> Cell
 {
-    let nknots : usize =  (rand::thread_rng().gen_range(10..=100) + nin + nout) as usize;
+    let nknots : usize =  (rand::thread_rng().gen_range(mnk..=mxk) + nin + nout) as usize;
     let d = Bernoulli::new(0.5).unwrap();
     let mut knots : Vec<i32> = rand::thread_rng().sample_iter(d).take(nknots*nknots).map(|b| if b {1} else {0}).collect();
     
@@ -64,7 +65,7 @@ fn make_cell(nin : usize, nout : usize) -> Cell
     }
 }
 
-fn shock(cell : &mut Cell, input : Vec<i32>)
+fn shock(cell : &mut Cell, input : &Vec<i32>)
 {
     if input.len() !=  cell.nin {
         panic!();
@@ -100,30 +101,27 @@ fn query(cell : &Cell) -> Vec<i32> {
     return output;
 }
 
-fn propagate(p1 : &Cell, p2 : &Cell) -> Cell {
-    panic!("not implemented");
+fn propagate(p1 : &mut Cell, p2 :&mut Cell) -> Cell {
+
+    let inp : Vec<i32> = (0..p1.nin).map(|_| {1}).collect();
+    shock(p1, &inp);
+    shock(p2, &inp);
+
+    let rs1 = query(p1)[0];
+    let rs2 = query(p2)[0];
+
+    let new_nodes = (rs1 + rs2 > 1) as usize * 10;
+    let avg = (p1.nknots + p2.nknots) / 2;
+    let mnk = if avg < new_nodes + 10 {10} else {avg - new_nodes};
+    let mxk = avg + new_nodes;
+    let cell = make_cell(p1.nin, p1.nout, mnk, mxk);
+
+    return cell;
 }
-
-// fn print_cell(cell : &Cell) {
-//     for i in 0..cell.nknots {
-//         println!("{:?}", &cell.knots[i*cell.nknots..(i+1)*cell.nknots]);
-//     }
-// }
-
-// fn random_point(width : f64, height : f64) -> Point {
-//     return Point {
-//         x : rand::thread_rng().gen_range(0..width as i64 - 1) as f64,
-//         y : rand::thread_rng().gen_range(0..height as i64 - 1) as f64
-//     }
-// }
 
 fn random(mx : i32) -> f64 {
     return rand::thread_rng().gen_range(0..mx) as f64;
 }
-
-// fn clamp(val : f64, mn : f64, mx : f64) -> f64 {
-//     return 
-// }
 
 fn nourish() {
     let width : f64 = 4000.0;
@@ -140,7 +138,7 @@ fn nourish() {
         .map(|id|
              CellContainer {
                  id: id as u32,
-                 cell : make_cell(4, 4),
+                 cell : make_cell(4, 4, 10, 100),
                  loc : Point {x: posx[id] as f64, y: posy[id] as f64},
                  health : 200
              })
@@ -185,7 +183,7 @@ fn nourish() {
                 let p : &Point = &(gran.shots[random(gran.shots.len() as i32) as usize]);
                 let inpb : Vec<bool> =  vec![p.x < cellc.loc.x, p.y < cellc.loc.y, p.x > cellc.loc.x, p.y > cellc.loc.y];
                 let inp : Vec<i32> = inpb.iter().map(|b| if *b {1} else {0}).collect();
-                shock(&mut cellc.cell, inp);
+                shock(&mut cellc.cell, &inp);
             }
         } else {
             for cellc in gran.cells.iter_mut() {
@@ -239,7 +237,25 @@ fn nourish() {
         }
 
         if gran.cells.len() < 300 {
-            
+            /* partner selection? */
+            let ids : Vec<usize> = (0..gran.cells.len()).collect();
+            let mp = ids.len() / 2;
+
+            for n in 0..mp {
+                let id1 = ids[n*2];
+                let id2 = ids[n*2+1];
+                let mut p1 = gran.cells[id1].cell.clone();
+                let mut p2 = gran.cells[id2].cell.clone();
+                let cell = propagate(&mut p1, &mut p2);
+
+                gran.cells[id1].cell = p1;
+                gran.cells[id2].cell = p2;
+
+                gran.cells.push(CellContainer {
+                    
+                });
+            }
+
         }
         
         beat += 1;

@@ -98,6 +98,40 @@ pub mod mat {
                 });
             }
         }
+
+        pub fn random_default(&self) -> Option<(usize, usize)>{
+            let total = self.rows() * self.cols() - self.actual_size();
+
+            if total < 0 {
+                return None;
+            }
+
+            let rand_idx = rand::Rng::gen_range(&mut rand::thread_rng(), 0..total);
+
+            let cridx = 0;
+            let ccidx = 0;
+            
+            let current_idx = 0;
+            for row_elem in self.data {
+                current_idx += (row_elem.idx - cridx) * self.cols() - ccidx;
+
+                cridx = row_elem.idx;
+                ccidx = 0;
+
+                if current_idx + self.cols() < rand_idx {
+                    continue;
+                }
+                
+                for elem in row_elem.data {
+                    if current_idx + elem.idx > rand_idx {
+                        return Some((cridx, rand_idx - current_idx));
+                    }
+
+                    ccidx = elem.idx;
+                    current_idx += ccidx;
+                }
+            }
+        }
     }
 
     // pub fn smat_find_all<T : std::cmp::PartialEq>(mat: &SparseMatrix<T>, val : T, cidx : usize, ridx : usize, radius : usize) -> Vec<T> {
