@@ -63,39 +63,37 @@ pub mod mat {
         };        
     }
 
-
     impl <T : std::fmt::Display + std::cmp::PartialEq> SparseMatrix<T> {
         pub fn insert(&mut self, cidx : usize, ridx : usize, val : T )
         {
-
-            let (ce, ci) = svec_find_idx(&self.data, cidx);
-            if !ce && val != self.def {
-                self.data.insert(ci, Element {
-                    idx : cidx,
-                    data :vec![Element { idx: ridx, data : val}]
+            let (re, ri) = svec_find_idx(&self.data, ridx);
+            if !re && val != self.def {
+                self.data.insert(ri, Element {
+                    idx : ridx,
+                    data :vec![Element { idx: cidx, data : val}]
                 });
 
                 return;
             }
 
-            let (re, ri) = svec_find_idx(&self.data[ci].data, ridx);
+            let (ce, ci) = svec_find_idx(&self.data[ri].data, ridx);
 
-            if re {
+            if ce {
                 if val == self.def {
-                    self.data[ci].data.remove(ri);
-                    if self.data[ci].data.len() == 0 {
-                        self.data.remove(ci);
+                    self.data[ri].data.remove(ci);
+                    if self.data[ri].data.len() == 0 {
+                        self.data.remove(ri);
                     }
                     return;
                 }
                 
-                self.data[ci].data[ri].data = val;
+                self.data[ri].data[ci].data = val;
                 return;
             }
 
-            if !re && val != self.def {
-                self.data[ci].data.insert(ri, Element {
-                    idx : ri,
+            if !ce && val != self.def {
+                self.data[ri].data.insert(ci, Element {
+                    idx : ci,
                     data : val
                 });
             }
