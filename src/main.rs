@@ -251,9 +251,12 @@ fn nourish() {
                 gran.cells[id1].cell = p1;
                 gran.cells[id2].cell = p2;
 
-                // gran.cells.push(CellContainer {
-                    
-                // });
+                gran.cells.push(CellContainer {
+                    cell,
+                    id: 99,
+                    loc: Point {x : 0.0, y: 0.0},
+                    health : 10
+                });
             }
 
         }
