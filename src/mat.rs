@@ -78,6 +78,8 @@ pub mod mat {
                 });
 
                 return;
+            } else if !re && val == self.def {
+                return;
             }
 
             let (ce, ci) = svec_find_idx(&self.data[ri].data, cidx);
@@ -255,44 +257,45 @@ pub mod mat {
 #[cfg(test)]
 pub mod tests {
     use super::mat::*;
-    // #[test]
-    // fn mat_init() {
-    //     let mat : SparseMatrix<u32> = SparseMatrix::new(10, 20, 0);
-    //     assert_eq!(mat.rows(), 20);
-    //     assert_eq!(mat.cols(), 10);
-    // }
 
-    // #[test]
-    // fn mat_size_1() {
-    //     let mat : SparseMatrix<u32> = SparseMatrix::new(10, 10, 0);
-    //     assert_eq!(mat.actual_size(), 0);
-    // }
+    #[test]
+    fn mat_init() {
+        let mat : SparseMatrix<u32> = SparseMatrix::new(10, 20, 0);
+        assert_eq!(mat.rows(), 20);
+        assert_eq!(mat.cols(), 10);
+    }
 
-    // #[test]
-    // fn mat_size_2() {
-    //     let mut mat : SparseMatrix<u32> = SparseMatrix::new(10, 10, 0);
-    //     mat.insert(0, 0, 10);
-    //     mat.insert(0, 1, 0);
-    //     mat.insert(3, 1, 10);
-    //     mat.insert(2, 0, 10);
-    //     mat.insert(3, 2, 10);
-    //     mat.insert(3, 1, 22);
-    //     assert_eq!(mat.actual_size(), 4);
-    // }
+    #[test]
+    fn mat_size_1() {
+        let mat : SparseMatrix<u32> = SparseMatrix::new(10, 10, 0);
+        assert_eq!(mat.actual_size(), 0);
+    }
 
-    // #[test]
-    // fn mat_elements_1() {
-    //     let mut mat : SparseMatrix<u32> = SparseMatrix::new(10, 10, 0);
-    //     mat.insert(0, 0, 10);
-    //     mat.insert(0, 1, 0);
-    //     mat.insert(3, 1, 10);
-    //     mat.insert(2, 0, 12);
-    //     mat.insert(3, 2, 10);
-    //     mat.insert(3, 1, 22);
-    //     assert_eq!(mat[[2,0]], 12);
-    //     assert_eq!(mat[[3,1]], 22);
-    //     assert_eq!(mat[[1,1]], 0);
-    // }
+    #[test]
+    fn mat_size_2() {
+        let mut mat : SparseMatrix<u32> = SparseMatrix::new(10, 10, 0);
+        mat.insert(0, 0, 10);
+        mat.insert(0, 1, 0);
+        mat.insert(3, 1, 10);
+        mat.insert(2, 0, 10);
+        mat.insert(3, 2, 10);
+        mat.insert(3, 1, 22);
+        assert_eq!(mat.actual_size(), 4);
+    }
+
+    #[test]
+    fn mat_elements_1() {
+        let mut mat : SparseMatrix<u32> = SparseMatrix::new(10, 10, 0);
+        mat.insert(0, 0, 10);
+        mat.insert(0, 1, 0);
+        mat.insert(3, 1, 10);
+        mat.insert(2, 0, 12);
+        mat.insert(3, 2, 10);
+        mat.insert(3, 1, 22);
+        assert_eq!(mat[[2,0]], 12);
+        assert_eq!(mat[[3,1]], 22);
+        assert_eq!(mat[[1,1]], 0);
+    }
 
     #[test]
     fn mat_avail() {
@@ -309,27 +312,10 @@ pub mod tests {
         mat.insert(3, 2, 10);
         mat.insert(3, 1, 22);
         mat.insert(5, 8, 4);
-
-        println!("{}", mat);
-        naive_print(&mat);
-        mat.print_data();
-
-        for i in 0..10 {
-            println!("Iter: {}", i);
-            match mat.random_default() {
-                Some((r, c)) => {
-                    mat.insert(r, c, 99);
-                    println!("\nInserting into: ({}, {})", r, c);
-                }
-                _ => { println!("None remaining"); break; }
-            };
-        }
-
-        println!("{}", mat);
-
+        
         assert_eq!(mat[[2,0]], 12);
         assert_eq!(mat[[3,1]], 22);
         assert_eq!(mat[[3,2]], 10);
+        assert_eq!(mat[[5,8]], 4);
     }
-
 }
