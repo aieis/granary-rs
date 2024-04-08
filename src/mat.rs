@@ -66,6 +66,10 @@ pub mod mat {
     impl <T : std::fmt::Display + std::cmp::PartialEq> SparseMatrix<T> {
         pub fn insert(&mut self, cidx : usize, ridx : usize, val : T )
         {
+            if ridx >= self.rows() || cidx >= self.cols() {
+                panic!("Matrix too small.\n\tInserting ({cidx}, {ridx}) into matrix of size {}x{}.", self.cols(), self.rows());
+            }
+
             let (re, ri) = svec_find_idx(&self.data, ridx);
             if !re && val != self.def {
                 self.data.insert(ri, Element {
@@ -100,13 +104,14 @@ pub mod mat {
         }
 
         pub fn random_default(&self) -> Option<(usize, usize)>{
+            let sa = self.actual_size();
             let total = self.rows() * self.cols() - self.actual_size();
-
+            println!("total={total}, sa={sa}");
             if total == 0 {
                 return None;
             }
 
-            let rand_idx = 0 ;//rand::Rng::gen_range(&mut rand::thread_rng(), 0..total);
+            let rand_idx = rand::Rng::gen_range(&mut rand::thread_rng(), 0..total);
             println!("Default index {} from {}", rand_idx, total);
 
             let mut cridx = 0;
@@ -116,25 +121,20 @@ pub mod mat {
             let mut nnum_empty;
 
             for row_elem in &self.data {
-                println!("{} {}", num_empty, ccidx);
-                print!("Row ({:2}) {:2}: ", cridx, row_elem.idx);
                 nnum_empty = num_empty + (row_elem.idx - cridx) * self.cols();
+                let new_row_idx = row_elem.idx;
+                println!("rand_idx={rand_idx}, num_empty={num_empty}, nnum_empty={nnum_empty}, cridx={cridx},  new_row_idx={new_row_idx}:");
                 if  nnum_empty > rand_idx {
                     let pos = cridx * self.cols();
                     let npos = (rand_idx - num_empty) + pos;
                     let r = npos / self.cols();
                     let c = npos % self.cols();
-                    return Some((r, c));
+                    return Some((c, r));
                 }
 
                 num_empty = nnum_empty;
                 cridx = row_elem.idx;
                 ccidx = 0;
-
-                // for elem in &row_elem.data {
-                //     print!(" ({}, {}) ", elem.idx, elem.data);
-                // }
-                // println!("");
 
                 for elem in &row_elem.data {
                     nnum_empty = num_empty + (elem.idx - ccidx);
@@ -157,15 +157,14 @@ pub mod mat {
                 cridx = row_elem.idx + 1;
             }
 
-            nnum_empty = num_empty + (self.rows - cridx) * self.cols() - ccidx;
+            nnum_empty = num_empty + (self.rows() - cridx) * self.cols();
             if  nnum_empty > rand_idx {
-                let pos = cridx * self.cols() + ccidx;
-                let npos = (rand_idx - num_empty + 1) + pos;
+                let pos = cridx * self.cols();
+                let npos = (rand_idx - num_empty) + pos;
                 let r = npos / self.cols();
                 let c = npos % self.cols();
                 return Some((c, r));
             }
-
 
             return None;
         }
@@ -187,15 +186,27 @@ pub mod mat {
 
             let mut ridx = 0;
 
+            write!(f, "{:<4}|", "")?;
+            for c in 0..self.cols() {
+                write!(f, " {:<4} ", c)?;
+            }
+            writeln!(f, "")?;
+            for _c in 0..self.cols()+1 {
+                write!(f, "______")?;
+            }
+            writeln!(f, "")?;
+
             for row in &self.data {
                 let cridx = row.idx;
-                for _r in ridx..cridx {
+                for r in ridx..cridx {
+                    write!(f, "{:<4}|", r)?;
                     for _c in 0..self.cols() {
                         write!(f, " {:<4} ", self.def)?;
                     }
                     writeln!(f, "")?;
                 }
 
+                write!(f, "{:<4}|", cridx)?;
                 let mut cidx = 0;
                 for val in &row.data {
                     let ccidx = val.idx;
@@ -215,7 +226,8 @@ pub mod mat {
                 ridx = cridx + 1;
             }
 
-            for _r in ridx..self.rows() {
+            for r in ridx..self.rows() {
+                write!(f, "{:<4}|", r)?;
                 for _c in 0..self.cols() {
                     write!(f, " {:<4} ", self.def)?;
                 }
@@ -296,17 +308,18 @@ pub mod tests {
         mat.insert(2, 0, 12);
         mat.insert(3, 2, 10);
         mat.insert(3, 1, 22);
+        mat.insert(5, 8, 4);
 
         println!("{}", mat);
         naive_print(&mat);
         mat.print_data();
 
-        for i in 0..32 {
+        for i in 0..10 {
             println!("Iter: {}", i);
             match mat.random_default() {
                 Some((r, c)) => {
                     mat.insert(r, c, 99);
-                    println!("({}, {})", r, c);
+                    println!("\nInserting into: ({}, {})", r, c);
                 }
                 _ => { println!("None remaining"); break; }
             };
